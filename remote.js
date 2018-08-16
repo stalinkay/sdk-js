@@ -3,12 +3,13 @@ const qs = require('qs');
 
 class RemoteInstance {
   constructor(options) {
-    const {accessToken, url, headers, accessTokenType, version} = options;
+    const {accessToken, url, headers, accessTokenType, version, maxFileSize} = options;
 
     this.accessTokenType = accessTokenType || 'header';
     this.accessToken = accessToken;
     this.headers = headers || {};
     this.version = version || '1.1';
+    this.maxFileSize = maxFileSize;
 
     if (!url) {
       throw new Error('No Directus URL provided');
@@ -64,7 +65,7 @@ class RemoteInstance {
     this.setAccessTokenParam(params);
 
     return new Promise((resolve, reject) => {
-      axios.post(url + endpoint, data, {headers, params})
+      axios.post(url + endpoint, data, {headers, params, maxContentLength: this.maxFileSize})
         .then(res => resolve(res.data))
         .catch(err => this._onCaughtError(resolve, reject, err));
     });
@@ -77,7 +78,7 @@ class RemoteInstance {
     this.setAccessTokenParam(params);
 
     return new Promise((resolve, reject) => {
-      axios.put(url + endpoint, data, {headers, params})
+      axios.put(url + endpoint, data, {headers, params, maxContentLength: this.maxFileSize})
         .then(res => resolve(res.data))
         .catch(err => this._onCaughtError(resolve, reject, err));
     });
