@@ -1,6 +1,6 @@
 {
   "name": "directus-sdk-javascript",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "Directus SDK for JavaScript (Node and Browser)",
   "main": "dist/remote.cjs.js",
   "module": "dist/remote.esm.js",
