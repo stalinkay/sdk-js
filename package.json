@@ -30,7 +30,7 @@
   "bugs": {
     "url": "https://github.com/directus/directus-sdk-javascript/issues"
   },
-  "homepage": "https://github.com/directus/directus-sdk-javascript#readme",
+  "homepage": "https://directus.io",
   "dependencies": {
     "argument-validator": "^0.1.0",
     "axios": "^0.18.0",
