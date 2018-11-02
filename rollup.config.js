@@ -1,14 +1,18 @@
 import resolve from 'rollup-plugin-node-resolve';
 import commonjs from 'rollup-plugin-commonjs';
-import buble from 'rollup-plugin-buble';
+import json from 'rollup-plugin-json';
 import { terser } from 'rollup-plugin-terser';
+import builtins from 'rollup-plugin-node-builtins';
+import globals from 'rollup-plugin-node-globals';
+import buble from 'rollup-plugin-buble';
 import pkg from './package.json';
 
 export default [
+  // browser-friendly UMD build
   {
-    input: 'index.js',
+    input: 'src/remote.js',
     output: {
-      name: 'remote',
+      name: 'remoteInstance',
       file: pkg.browser,
       format: 'umd',
       exports: 'named',
@@ -16,22 +20,28 @@ export default [
     plugins: [
       resolve(),
       commonjs(),
+      globals(),
+      builtins(),
       buble({
-        exclude: ['node_modules/**']
+        exclude: ['node_modules/**'],
       }),
-      terser()
-    ]
-  },
-  {
-    input: 'index.js',
-    external: ['axios', 'qs'],
-    output: [
-      { file: pkg.main, format: 'cjs', exports: 'named' },
-      { file: pkg.module, format: 'es', exports: 'named' },
+      json(),
+      terser(),
     ],
-    plugins: [
-      resolve(),
-      commonjs()
-    ]
-  }
+  },
+
+  // CommonJS (for Node) and ES module (for bundlers) build.
+  // (We could have three entries in the configuration array
+  // instead of two, but it's quicker to generate multiple
+  // builds from a single configuration where possible, using
+  // an array for the `output` option, where we can specify
+  // `file` and `format` for each target)
+  {
+    input: 'src/remote.js',
+    external: ['argument-validator', 'axios', 'base-64', 'qs'],
+    output: [
+      { file: pkg.main, format: 'cjs' },
+      { file: pkg.module, format: 'es' },
+    ],
+  },
 ];

@@ -1,401 +1,1149 @@
 const axios = require('axios');
+const base64 = require('base-64');
 const qs = require('qs');
+const AV = require('argument-validator');
 
-class RemoteInstance {
-  constructor(options) {
-    const {accessToken, url, headers, accessTokenType, version, maxFileSize} = options;
+/**
+ * Retrieves the payload from a JWT
+ * @param  {String} token The JWT to retrieve the payload from
+ * @return {Object}       The JWT payload
+ */
+function getPayload(token) {
+  const payloadBase64 = token
+    .split('.')[1]
+    .replace('-', '+')
+    .replace('_', '/');
+  const payloadDecoded = base64.decode(payloadBase64);
+  const payloadObject = JSON.parse(payloadDecoded);
 
-    this.accessTokenType = accessTokenType || 'header';
-    this.accessToken = accessToken;
-    this.headers = headers || {};
-    this.version = version || '1.1';
-    this.maxFileSize = maxFileSize;
-
-    if (!url) {
-      throw new Error('No Directus URL provided');
-    }
-
-    // TEMP FIX FOR BACKWARD COMPATIBILTY
-    let _url = url.replace('/api/1.1', '');
-
-    this.base = _url.replace(/\/+$/, '');
-    this.api = this.base + '/api/';
-    this.url = this.api + this.version + '/';
+  if (AV.isNumber(payloadObject.exp)) {
+    payloadObject.exp = new Date(payloadObject.exp * 1000);
   }
 
-  get _requestHeaders() {
-    const headers = Object.assign({}, this.headers);
+  return payloadObject;
+}
 
-    if (this.accessToken && this.accessTokenType === 'header') {
-      headers.Authorization = 'Bearer ' + this.accessToken;
-    }
+/**
+ * Create a new SDK instance
+ * @param       {object} [options]
+ * @param       {string} [options.url]   The API url to connect to
+ * @param       {string} [options.env]   The API environment to connect to
+ * @param       {string} [options.token] The access token to use for requests
+ * @constructor
+ */
+function SDK(options = {}) {
+  return {
+    url: options.url,
+    token: options.token,
+    env: options.env || '_',
+    axios: axios.create({
+      paramsSerializer: qs.stringify,
+      timeout: 10 * 60 * 1000, // 10 min
+    }),
+    refreshInterval: null,
+    onAutoRefreshError: null,
+    onAutoRefreshSuccess: null,
 
-    return headers;
-  }
+    get payload() {
+      if (!AV.isString(this.token)) return null;
+      return getPayload(this.token);
+    },
 
-  _onCaughtError(resolve, reject, err) {
-    if (err.response && err.response.data) {
-      return reject(err.response.data);
-    }
+    get loggedIn() {
+      if (
+        AV.isString(this.token) &&
+        AV.isString(this.url) &&
+        AV.isString(this.env) &&
+        AV.isObject(this.payload)
+      ) {
+        if (this.payload.exp.getTime() > Date.now()) {
+          return true;
+        }
+      }
+      return false;
+    },
 
-    return reject(err);
-  }
+    // REQUEST METHODS
+    // -------------------------------------------------------------------------
 
-  _get(endpoint, params = {}, isAPI = false) {
-    const headers = this._requestHeaders;
-    const url = isAPI ? this.api : this.url;
+    /**
+     * Directus API request promise
+     * @promise RequestPromise
+     * @fulfill {object} Directus data
+     * @reject {Error} Network error (if no connection to API)
+     * @reject {Error} Directus error (eg not logged in or 404)
+     */
 
-    this.setAccessTokenParam(params);
+    /**
+     * Perform an API request to the Directus API
+     * @param  {string} method      The HTTP method to use
+     * @param  {string} endpoint    The API endpoint to request
+     * @param  {Object} [params={}] The HTTP query parameters (GET only)
+     * @param  {Object} [data={}]   The HTTP request body (non-GET only)
+     * @param  {Boolean} noEnv      Don't use the env in the path
+     * @return {RequestPromise}
+     */
+    request(method, endpoint, params = {}, data = {}, noEnv = false, headers = {}) {
+      AV.string(method, 'method');
+      AV.string(endpoint, 'endpoint');
+      AV.objectOrEmpty(params, 'params');
+      Array.isArray(data) ? AV.arrayOrEmpty(data, 'data') : AV.objectOrEmpty(data, 'data');
 
-    return new Promise((resolve, reject) => {
-      axios.get(url + endpoint, {
+      AV.string(this.url, 'this.url');
+
+      let baseURL = `${this.url}/`;
+
+      if (noEnv === false) {
+        baseURL += `${this.env}/`;
+      }
+
+      const requestOptions = {
+        url: endpoint,
+        method,
+        baseURL,
         params,
-        headers,
-        paramsSerializer: params => qs.stringify(params, {arrayFormat: 'brackets', encode: false})
-      })
-        .then(res => resolve(res.data))
-        .catch(err => this._onCaughtError(resolve, reject, err));
-    });
-  }
+        data,
+      };
 
-  _post(endpoint, data = {}, params = {}, isAPI = false) {
-    const headers = this._requestHeaders;
-    const url = isAPI ? this.api : this.url;
+      if (this.token && typeof this.token === 'string' && this.token.length > 0) {
+        requestOptions.headers = headers;
+        requestOptions.headers.Authorization = `Bearer ${this.token}`;
+      }
 
-    this.setAccessTokenParam(params);
+      return this.axios
+        .request(requestOptions)
+        .then(res => res.data)
+        .then(data => {
+          if (!data || data.length === 0) return data;
 
-    return new Promise((resolve, reject) => {
-      axios.post(url + endpoint, data, {headers, params, maxContentLength: this.maxFileSize})
-        .then(res => resolve(res.data))
-        .catch(err => this._onCaughtError(resolve, reject, err));
-    });
-  }
-
-  _put(endpoint, data = {}, params = {}, isAPI = false) {
-    const headers = this._requestHeaders;
-    const url = isAPI ? this.api : this.url;
-
-    this.setAccessTokenParam(params);
-
-    return new Promise((resolve, reject) => {
-      axios.put(url + endpoint, data, {headers, params, maxContentLength: this.maxFileSize})
-        .then(res => resolve(res.data))
-        .catch(err => this._onCaughtError(resolve, reject, err));
-    });
-  }
-
-  _delete(endpoint, data = {}, params = {}, isAPI = false) {
-    const headers = this._requestHeaders;
-    const url = isAPI ? this.api : this.url;
-
-    this.setAccessTokenParam(params);
-
-    return new Promise((resolve, reject) => {
-      axios.delete(url + endpoint, {headers, data, params})
-        .then(res => resolve(res.data))
-        .catch(err => this._onCaughtError(resolve, reject, err));
-    });
-  }
-
-  // Authentication
-  // -------------------------------------------
-  authenticate(email = requiredParam('email'), password = requiredParam('password')) {
-    return new Promise((resolve, reject) => {
-      this._post('auth/request-token', {email, password})
-        .then(res => {
-          if (res.success) {
-            this.accessToken = res.data.token;
-            return resolve(res);
+          if (typeof data !== 'object') {
+            try {
+              return JSON.parse(data);
+            } catch(error) {
+              throw {
+                json: true,
+                error,
+                data
+              };
+            }
           }
-          return reject(res);
+
+          return data;
         })
-        .catch(err => reject(err));
-    });
-  }
+        .catch((error) => {
+          if (error.response) {
+            throw error.response.data.error;
+          } else if (error.json === true) {
+            throw {
+              // eslint-disable-line
+              code: -2,
+              message: 'API returned invalid JSON',
+              error: error.error,
+              data: error.data
+            };
+          } else {
+            throw {
+              // eslint-disable-line
+              code: -1,
+              message: 'Network Error',
+              error,
+            };
+          }
+        });
+    },
 
-  deauthenticate() {
-    this.accessToken = null;
-  }
+    /**
+     * GET convenience method. Calls the request method for you
+     * @param  {string} endpoint    The endpoint to get
+     * @param  {Object} [params={}] The HTTP query parameters (GET only)
+     * @return {RequestPromise}
+     */
+    get(endpoint, params = {}) {
+      AV.string(endpoint, 'endpoint');
+      AV.objectOrEmpty(params, 'params');
 
-  // Items
-  // ----------------------------------------------------------------------------------
-  createItem(table = requiredParam('table'), data = {}, params = {}) {
-    return this._post(`tables/${table}/rows`, data, params);
-  }
+      return this.request('get', endpoint, params);
+    },
 
-  getItems(table = requiredParam('table'), params = {}) {
-    return this._get(`tables/${table}/rows`, params);
-  }
+    /**
+     * POST convenience method. Calls the request method for you
+     * @param  {string} endpoint  The endpoint to get
+     * @param  {Object} [body={}] The HTTP request body
+     * @return {RequestPromise}
+     */
+    post(endpoint, body = {}, params = {}) {
+      AV.string(endpoint, 'endpoint');
+      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
 
-  getItem(table = requiredParam('table'), id = requiredParam('id'), params = {}) {
-    return this._get(`tables/${table}/rows/${id}`, params);
-  }
+      return this.request('post', endpoint, params, body);
+    },
 
-  updateItem(table = requiredParam('table'), id = requiredParam('id'), data = requiredParam('data'), params = {}) {
-    return this._put(`tables/${table}/rows/${id}`, data, params);
-  }
+    /**
+     * PATCH convenience method. Calls the request method for you
+     * @param  {string} endpoint  The endpoint to get
+     * @param  {Object} [body={}] The HTTP request body
+     * @return {RequestPromise}
+     */
+    patch(endpoint, body = {}, params = {}) {
+      AV.string(endpoint, 'endpoint');
+      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
 
-  deleteItem(table = requiredParam('table'), id = requiredParam('id'), params = {}) {
-    return this._delete(`tables/${table}/rows/${id}`, {}, params);
-  }
+      return this.request('patch', endpoint, params, body);
+    },
 
-  createBulk(table = requiredParam('table'), data = requiredParam('data')) {
-    if (Array.isArray(data) === false) {
-      throw new TypeError(`Parameter data should be an array of objects`);
-    }
+    /**
+     * PATCH convenience method. Calls the request method for you
+     * @param  {string} endpoint  The endpoint to get
+     * @param  {Object} [body={}] The HTTP request body
+     * @return {RequestPromise}
+     */
+    put(endpoint, body = {}, params = {}) {
+      AV.string(endpoint, 'endpoint');
+      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
 
-    return this._post(`tables/${table}/rows/bulk`, {
-      rows: data
-    });
-  }
+      return this.request('put', endpoint, params, body);
+    },
 
-  updateBulk(table = requiredParam('table'), data = requiredParam('data')) {
-    if (Array.isArray(data) === false) {
-      throw new TypeError(`Parameter data should be an array of objects`);
-    }
+    /**
+     * PATCH convenience method. Calls the request method for you
+     * @param  {string} endpoint  The endpoint to get
+     * @return {RequestPromise}
+     */
+    delete(endpoint) {
+      AV.string(endpoint, 'endpoint');
 
-    return this._put(`tables/${table}/rows/bulk`, {
-      rows: data
-    });
-  }
+      return this.request('delete', endpoint);
+    },
 
-  deleteBulk(table = requiredParam('table'), data = requiredParam('data')) {
-    if (Array.isArray(data) === false) {
-      throw new TypeError(`Parameter data should be an array of objects`);
-    }
+    // AUTHENTICATION
+    // -------------------------------------------------------------------------
 
-    return this._delete(`tables/${table}/rows/bulk`, {
-      rows: data
-    });
-  }
+    /**
+     * Logging in promise
+     * @promise LoginPromise
+     * @fulfill {Object} Object containing URL, ENV, and TOKEN
+     * @reject {Error}   Network error (if no connection to API)
+     * @reject {Error}   Directus error (eg not logged in or 404)
+     */
 
-  // Files
-  // ----------------------------------------------------------------------------------
-  createFile(data = {}) {
-    return this._post('files', data);
-  }
+    /**
+     * Login to the API.
+     *
+     * Gets a new token from the API and stores it in this.token
+     * @param  {Object} credentials
+     * @param  {String} credentials.email    The user's email address
+     * @param  {String} credentials.password The user's password
+     * @param  {String} [credentials.url]    The API to login to (overwrites this.url)
+     * @param  {String} [credentials.env]    The API env to login to (overwrites this.env)
+     * @return {LoginPromise}
+     */
+    login(credentials) {
+      AV.object(credentials, 'credentials');
+      AV.keysWithString(credentials, ['email', 'password'], 'credentials');
 
-  getFiles(params = {}) {
-    return this._get('files', params);
-  }
+      this.token = null;
 
-  getFile(id = requiredParam('id')) {
-    return this._get(`files/${id}`);
-  }
+      if (AV.hasKeysWithString(credentials, ['url'])) {
+        this.url = credentials.url;
+      }
 
-  updateFile(id = requiredParam('id'), data = requiredParam('data')) {
-    return this._put(`files/${id}`, data);
-  }
+      if (AV.hasKeysWithString(credentials, ['env'])) {
+        this.env = credentials.env;
+      }
 
-  deleteFile(id = requiredParam('id')) {
-    return this._delete(`files/${id}`);
-  }
+      if (credentials.persist) {
+        this.startInterval();
+      }
 
-  // Tables
-  // ----------------------------------------------------------------------------------
-  createTable(name = requiredParam('name')) {
-    return this._post('tables', {name});
-  }
+      return new Promise((resolve, reject) => {
+        this.post('/auth/authenticate', {
+          email: credentials.email,
+          password: credentials.password,
+        })
+          .then(res => res.data.token)
+          .then((token) => {
+            this.token = token;
+            resolve({
+              url: this.url,
+              env: this.env,
+              token: this.token,
+            });
+          })
+          .catch(reject);
+      });
+    },
 
-  getTables(params = {}) {
-    return this._get('tables', params);
-  }
+    /**
+     * Logs the user out by "forgetting" the URL, ENV, and token, and clearing the refresh interval
+     */
+    logout() {
+      this.token = null;
+      this.env = '_';
+      this.url = null;
 
-  getTable(table = requiredParam('table'), params = {}) {
-    return this._get(`tables/${table}`, params);
-  }
+      if (this.refreshInterval) {
+        this.stopInterval();
+      }
+    },
 
-  // Columns
-  // ----------------------------------------------------------------------------------
-  createColumn(table = requiredParam('table'), data = {}) {
-    return this._post(`tables/${table}/columns`, data);
-  }
+    /**
+     * Starts an interval of 10 seconds that will check if the token needs refreshing
+     * @param {Boolean} fireImmediately Fire the refreshIfNeeded method directly
+     */
+    startInterval(fireImmediately) {
+      if (fireImmediately) this.refreshIfNeeded();
+      this.refreshInterval = setInterval(this.refreshIfNeeded.bind(this), 10000);
+    },
 
-  getColumns(table = requiredParam('table'), params = {}) {
-    return this._get(`tables/${table}/columns`, params);
-  }
+    /**
+     * Clears and nullifies the token refreshing interval
+     */
+    stopInterval() {
+      clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
+    },
 
-  getColumn(table = requiredParam('table'), column = requiredParam('column')) {
-    return this._get(`tables/${table}/columns/${column}`);
-  }
+    /**
+     * Refresh the token if it is about to expire (within 30 seconds of expiry date)
+     *
+     * Calls onAutoRefreshSuccess with the new token if the refreshing is successful
+     * Calls onAutoRefreshError if refreshing the token fails for some reason
+     */
+    refreshIfNeeded() {
+      if (!AV.hasStringKeys(this, ['token', 'url', 'env'])) return;
+      if (!this.payload || !this.payload.exp) return;
 
-  updateColumn(table = requiredParam('table'), column = requiredParam('column'), data = {}) {
-    return this._put(`tables/${table}/columns/${column}`, data);
-  }
+      const timeDiff = this.payload.exp.getTime() - Date.now();
 
-  deleteColumn(table = requiredParam('table'), column = requiredParam('column')) {
-    return this._delete(`tables/${table}/columns/${column}`);
-  }
+      if (timeDiff <= 0) {
+        if (AV.isFunction(this.onAutoRefreshError)) {
+          this.onAutoRefreshError({
+            message: 'auth_expired_token',
+            code: 102,
+          });
+        }
+        return;
+      }
 
-  // Groups
-  // ----------------------------------------------------------------------------------
-  createGroup(name = requiredParam('name')) {
-    return this._post('groups', {name});
-  }
+      if (timeDiff < 30000) {
+        this.refresh(this.token)
+          .then((res) => {
+            this.token = res.data.token;
+            if (AV.isFunction(this.onAutoRefreshSuccess)) {
+              this.onAutoRefreshSuccess({
+                url: this.url,
+                env: this.env,
+                token: this.token,
+              });
+            }
+          })
+          .catch((error) => {
+            if (AV.isFunction(this.onAutoRefreshError)) {
+              this.onAutoRefreshError(error);
+            }
+          });
+      }
+    },
 
-  getGroups() {
-    return this._get('groups');
-  }
+    /**
+     * Use the passed token to request a new one
+     * @param  {String} token Active & Valid token
+     * @return {RequestPromise}
+     */
+    refresh(token) {
+      AV.string(token, 'token');
+      return this.post('/auth/refresh', { token });
+    },
 
-  getGroup(id = requiredParam('id')) {
-    return this._get(`groups/${id}`);
-  }
+    /**
+     * Request to reset the password of the user with the given email address
+     *
+     * The API will send an email to the given email address with a link to generate a new
+     * temporary password.
+     * @param {String} email The user's email
+     */
+    requestPasswordReset(email) {
+      AV.string(email, 'email');
+      return this.post('/auth/reset-request', {
+        email,
+        instance: this.url,
+      });
+    },
 
-  // Privileges
-  // ----------------------------------------------------------------------------------
-  createPrivileges(id = requiredParam('id'), data = {}) {
-    return this._post(`privileges/${id}`, data);
-  }
+    // ACTIVITY
+    // -------------------------------------------------------------------------
 
-  getPrivileges(id = requiredParam('id')) {
-    return this._get(`privileges/${id}`);
-  }
+    /**
+     * Get activity
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getActivity(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/activity', params);
+    },
 
-  getTablePrivileges(id = requiredParam('id'), table = requiredParam('table')) {
-    return this._get(`privileges/${id}/${table}`);
-  }
+    // BOOKMARKS
+    // -------------------------------------------------------------------------
 
-  updatePrivileges(id = requiredParam('id'), table = requiredParam('table')) {
-    return this._get(`privileges/${id}/${table}`);
-  }
+    /**
+     * Get the bookmarks of the current user
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getMyBookmarks(params = {}) {
+      AV.string(this.token, 'this.token');
+      AV.objectOrEmpty(params);
+      return Promise.all([
+        this.get('/collection_presets', {
+          'filter[title][nnull]': 1,
+          'filter[user][eq]': this.payload.id,
+        }),
+        this.get('/collection_presets', {
+          'filter[title][nnull]': 1,
+          'filter[role][eq]': this.payload.role,
+          'filter[user][null]': 1,
+        }),
+      ]).then((values) => {
+        const [user, role] = values; // eslint-disable-line no-shadow
+        return [...user.data, ...role.data];
+      });
+    },
 
-  // Preferences
-  // ----------------------------------------------------------------------------------
-  getPreferences(table = requiredParam('table')) {
-    return this._get(`tables/${table}/preferences`);
-  }
+    // COLLECTIONS
+    // -------------------------------------------------------------------------
 
-  updatePreference(table = requiredParam('table'), data = {}) {
-    return this._update(`tables/${table}/preferences`, data);
-  }
+    /**
+     * Get all available collections
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getCollections(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/collections', params);
+    },
 
-  // Messages
-  // ----------------------------------------------------------------------------------
-  getMessages(params = {}) {
-    return this._get('messages/rows', params);
-  }
+    /**
+     * Get collection info by name
+     * @param  {String} collection  Collection name
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getCollection(collection, params = {}) {
+      AV.string(collection, 'collection');
+      AV.objectOrEmpty(params, 'params');
+      return this.get(`/collections/${collection}`, params);
+    },
 
-  getMessage(id = requiredParam('id')) {
-    return this._get(`messages/rows/${id}`);
-  }
+    /**
+     * Create a collection
+     * @param {Object} data Collection information
+     * @return {RequestPromise}
+     */
+    createCollection(data) {
+      AV.object(data, 'data');
+      return this.post('/collections', data);
+    },
 
-  sendMessage(data = requiredParam('data')) {
-    return this._post('messages/rows/', data);
-  }
+    /**
+     * @param  {String} The collection to update
+     * @param  {Object} The fields to update
+     * @return {RequestPromise}
+     */
+    updateCollection(collection, data) {
+      AV.string(collection, 'collection');
+      AV.object(data, 'data');
+      return this.patch(`/collections/${collection}`, data);
+    },
 
-  // Activity
-  // ----------------------------------------------------------------------------------
-  getActivity(params = {}) {
-    return this._get('activity', params);
-  }
+    /**
+     * @param  {String} collection The primary key of the collection to remove
+     * @return {RequestPromise}
+     */
+    deleteCollection(collection) {
+      AV.string(collection, 'collection');
+      return this.delete(`/collections/${collection}`);
+    },
 
-  // Bookmarks
-  // ----------------------------------------------------------------------------------
-  getBookmarks() {
-    return this._get('bookmarks');
-  }
+    // COLLECTION PRESETS
+    // -------------------------------------------------------------------------
 
-  getUserBookmarks() {
-    return this._get('bookmarks/self');
-  }
+    /**
+     * Create a new collection preset (bookmark / listing preferences)
+     * @param  {Object} data The bookmark info
+     * @return {RequestPromise}
+     */
+    createCollectionPreset(data) {
+      AV.object(data);
+      return this.post('/collection_presets', data);
+    },
 
-  getBookmark(id = requiredParam('id')) {
-    return this._get(`bookmarks/${id}`);
-  }
+    /**
+     * Update collection preset (bookmark / listing preference)
+     * @param {String|Number} primaryKey
+     * @param {RequestPromise} data
+     */
+    updateCollectionPreset(primaryKey, data) {
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.object(data, 'data');
 
-  createBookmark(data = requiredParam('data')) {
-    return this._post('bookmarks', data);
-  }
+      return this.patch(`/collection_presets/${primaryKey}`, data);
+    },
 
-  deleteBookmark(id = requiredParam('id')) {
-    return this._delete(`bookmarks/${id}`);
-  }
+    /**
+     * Delete collection preset by primarykey
+     * @param {String|Number} primaryKey The primaryKey of the preset to delete
+     */
+    deleteCollectionPreset(primaryKey) {
+      AV.notNull(primaryKey, 'primaryKey');
+      return this.delete(`/collection_presets/${primaryKey}`);
+    },
 
-  // Settings
-  // ----------------------------------------------------------------------------------
-  getSettings() {
-    return this._get('settings');
-  }
+    // EXTENSIONS
+    // -------------------------------------------------------------------------
 
-  getSettingsByCollection(name = requiredParam('name')) {
-    return this._get(`settings/${name}`);
-  }
+    /**
+     * Get the meta information of all installed interfaces
+     * @return {RequestPromise}
+     */
+    getInterfaces() {
+      return this.request('get', '/interfaces', {}, {}, true);
+    },
 
-  updateSettings(name = requiredParam('name'), data = {}) {
-    return this._put(`settings/${name}`, data);
-  }
+    /**
+     * Get the meta information of all installed layouts
+     * @return {RequestPromise}
+     */
+    getLayouts() {
+      return this.request('get', '/layouts', {}, {}, true);
+    },
 
-  // Users
-  // ----------------------------------------------------------------------------------
-  getUsers(params = {}) {
-    return this._get('users', params);
-  }
+    /**
+     * Get the meta information of all installed pages
+     * @return {RequestPromise}
+     */
+    getPages() {
+      return this.request('get', '/pages', {}, {}, true);
+    },
 
-  getUser(id = requiredParam('id')) {
-    return this._get(`users/${id}`);
-  }
+    // FIELDS
+    // ------------------------------------------------------------------------
 
-  getMe() {
-    return this._get(`users/me`);
-  }
+    /**
+     * Get all fields that are in Directus
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getAllFields(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/fields', params);
+    },
 
-  createUser(user = requiredParam('user')) {
-    return this._post('users', user);
-  }
+    /**
+     * Get the fields that have been setup for a given collection
+     * @param  {String} collection  Collection name
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getFields(collection, params = {}) {
+      AV.string(collection, 'collection');
+      AV.objectOrEmpty(params, 'params');
+      return this.get(`/fields/${collection}`, params);
+    },
 
-  updateUser(id = requiredParam('id'), data = requiredParam('data')) {
-    return this._put(`users/${id}`, data);
-  }
+    /**
+     * Get the field information for a single given field
+     * @param  {String} collection  Collection name
+     * @param  {String} fieldName   Field name
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getField(collection, fieldName, params = {}) {
+      AV.string(collection, 'collection');
+      AV.string(fieldName, 'fieldName');
+      AV.objectOrEmpty(params, 'params');
+      return this.get(`/fields/${collection}/${fieldName}`, params);
+    },
 
-  updateMe(data = requiredParam('data')) {
-    return this._put('users/me', data);
-  }
+    /**
+     * Create a field in the given collection
+     * @param  {String} collection Collection to add the field in
+     * @param  {Object} fieldInfo  The fields info to save
+     * @return {RequestPromise}
+     */
+    createField(collection, fieldInfo) {
+      AV.string(collection, 'collection');
+      AV.object(fieldInfo, 'fieldInfo');
+      return this.post(`/fields/${collection}`, fieldInfo);
+    },
 
-  // WARNING: Updating user password doesn't check strength or length
-  updatePassword(password = requiredParam('password')) {
-    return this._put('users/me', {password: password});
-  }
+    /**
+     * Update a given field in a given collection
+     * @param  {String} collection Field's parent collection
+     * @param  {String} fieldName  Name of the field to update
+     * @param  {Object} fieldInfo  Fields to update
+     * @return {RequestPromise}
+     */
+    updateField(collection, fieldName, fieldInfo) {
+      AV.string(collection, 'collection');
+      AV.string(fieldName, 'fieldName');
+      AV.object(fieldInfo, 'fieldInfo');
+      return this.patch(`/fields/${collection}/${fieldName}`, fieldInfo);
+    },
 
-  // API Endpoints
-  // ----------------------------------------------------------------------------------
+    /**
+     * Update multiple fields at once
+     * @param  {String} collection             Fields' parent collection
+     * @param  {Array} fieldsInfoOrFieldNames  Array of field objects or array of field names
+     * @param  {Object} [fieldInfo]            In case fieldsInfoOrFieldNames is an array of fieldNames, you need to provide the fields to update
+     * @return {RequestPromise}
+     *
+     * @example
+     *
+     * // Set multiple fields to the same value
+     * updateFields("projects", ["first_name", "last_name", "email"], {
+     *   default_value: ""
+     * })
+     *
+     * // Set multiple fields to different values
+     * updateFields("projects", [
+     *   {
+     *     id: 14,
+     *     sort: 1
+     *   },
+     *   {
+     *     id: 17,
+     *     sort: 2
+     *   },
+     *   {
+     *     id: 912,
+     *     sort: 3
+     *   }
+     * ])
+     */
+    updateFields(collection, fieldsInfoOrFieldNames, fieldInfo = null) {
+      AV.string(collection, 'collection');
+      AV.array(fieldsInfoOrFieldNames, 'fieldsInfoOrFieldNames');
 
-  getApi(api_endpoint = requiredParam('api_endpoint'), params = {}) {
-    return this._get(api_endpoint, params, true);
-  }
+      if (fieldInfo) {
+        AV.object(fieldInfo);
+      }
 
-  postApi(api_endpoint = requiredParam('api_endpoint'), data = requiredParam('data'), params = {}) {
-    return this._post(api_endpoint, data, params, true);
-  }
+      if (fieldInfo) {
+        return this.patch(`/fields/${collection}/${fieldsInfoOrFieldNames.join(',')}`, fieldInfo);
+      }
 
-  putApi(api_endpoint = requiredParam('api_endpoint'), data = requiredParam('data')) {
-    return this._put(api_endpoint, data, true);
-  }
+      return this.patch(`/fields/${collection}`, fieldsInfoOrFieldNames);
+    },
 
-  deleteApi(api_endpoint = requiredParam('api_endpoint'), data = requiredParam('data')) {
-    return this._delete(api_endpoint, data, true);
-  }
+    /**
+     * Delete a field from a collection
+     * @param  {String} collection Name of the collection
+     * @param  {String} fieldName  The name of the field to delete
+     * @return {RequestPromise}
+     */
+    deleteField(collection, fieldName) {
+      AV.string(collection, 'collection');
+      AV.string(fieldName, 'fieldName');
+      return this.delete(`/fields/${collection}/${fieldName}`);
+    },
 
-  // Hash
-  // ----------------------------------------------------------------------------------
-  getHash(string = requiredParam('string'), data = {}) {
-    return this._post('hash', data);
-  }
 
-  // Random
-  // ----------------------------------------------------------------------------------
-  getRandom(params = {}) {
-    return this._post('random', {}, params);
-  }
+    // FILES
+    // ------------------------------------------------------------------------
 
-  setAccessTokenParam (params) {
-    if (this.accessToken && this.accessTokenType === 'parameter') {
-      params.access_token = this.accessToken;
-    }
-  }
+    /**
+     * Upload multipart files in multipart/form-data
+     * @param  {Object} data FormData object containing files
+     * @return {RequestPromise}
+     */
+    uploadFiles(data, onUploadProgress = () => {}) {
+      const headers = {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${this.token}`
+      };
+
+      return this.axios
+        .post(`${this.url}/${this.env}/files`, data, { headers, onUploadProgress })
+        .then(res => res.data)
+        .catch((error) => {
+          if (error.response) {
+            throw error.response.data.error;
+          } else {
+            throw {
+              // eslint-disable-line
+              code: -1,
+              message: 'Network Error',
+              error,
+            };
+          }
+        });
+    },
+
+    // ITEMS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Update an existing item
+     * @param  {String} collection The collection to add the item to
+     * @param  {String|Number} primaryKey Primary key of the item
+     * @param  {Object} body       The item's field values
+     * @return {RequestPromise}
+     */
+    updateItem(collection, primaryKey, body) {
+      AV.string(collection, 'collection');
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.object(body, 'body');
+
+      if (collection.startsWith('directus_')) {
+        return this.patch(`/${collection.substring(9)}/${primaryKey}`, body);
+      }
+
+      return this.patch(`/items/${collection}/${primaryKey}`, body);
+    },
+
+    /**
+     * Update multiple items
+     * @param  {String} collection The collection to add the item to
+     * @param  {Array} body        The item's field values
+     * @return {RequestPromise}
+     */
+    updateItems(collection, body) {
+      AV.string(collection, 'collection');
+      AV.array(body, 'body');
+
+      if (collection.startsWith('directus_')) {
+        return this.patch(`/${collection.substring(9)}`, body);
+      }
+
+      return this.patch(`/items/${collection}`, body);
+    },
+
+    /**
+     * Create a new item
+     * @param  {String} collection The collection to add the item to
+     * @param  {Object} body       The item's field values
+     * @return {RequestPromise}
+     */
+    createItem(collection, body) {
+      AV.string(collection, 'collection');
+      AV.object(body, 'body');
+
+      if (collection.startsWith('directus_')) {
+        return this.post(`/${collection.substring(9)}`, body);
+      }
+
+      return this.post(`/items/${collection}`, body);
+    },
+
+    /**
+     * Create multiple items
+     * @param  {String} collection The collection to add the item to
+     * @param  {Array} body        The item's field values
+     * @return {RequestPromise}
+     */
+    createItems(collection, body) {
+      AV.string(collection, 'collection');
+      AV.array(body, 'body');
+
+      if (collection.startsWith('directus_')) {
+        return this.post(`/${collection.substring(9)}`, body);
+      }
+
+      return this.post(`/items/${collection}`, body);
+    },
+
+    /**
+     * Get items from a given collection
+     * @param  {String} collection The collection to add the item to
+     * @param  {Object} [params={}]   Query parameters
+     * @return {RequestPromise}
+     */
+    getItems(collection, params = {}) {
+      AV.string(collection, 'collection');
+      AV.objectOrEmpty(params, 'params');
+
+      if (collection.startsWith('directus_')) {
+        return this.get(`/${collection.substring(9)}`, params);
+      }
+
+      return this.get(`/items/${collection}`, params);
+    },
+
+    /**
+     * Get a single item by primary key
+     * @param  {String} collection  The collection to add the item to
+     * @param  {String|Number} primaryKey Primary key of the item
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getItem(collection, primaryKey, params = {}) {
+      AV.string(collection, 'collection');
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.objectOrEmpty(params, 'params');
+
+      if (collection.startsWith('directus_')) {
+        return this.get(`/${collection.substring(9)}/${primaryKey}`, params);
+      }
+
+      return this.get(`/items/${collection}/${primaryKey}`, params);
+    },
+
+    /**
+     * Delete a single item by primary key
+     * @param  {String} collection  The collection to delete the item from
+     * @param  {String|Number} primaryKey Primary key of the item
+     * @return {RequestPromise}
+     */
+    deleteItem(collection, primaryKey) {
+      AV.string(collection, 'collection');
+      AV.notNull(primaryKey, 'primaryKey');
+
+      if (collection.startsWith('directus_')) {
+        return this.delete(`/${collection.substring(9)}/${primaryKey}`);
+      }
+
+      return this.delete(`/items/${collection}/${primaryKey}`);
+    },
+
+    /**
+     * Delete multiple items by primary key
+     * @param  {String} collection  The collection to delete the item from
+     * @param  {Array} primaryKey Primary key of the item
+     * @return {RequestPromise}
+     */
+    deleteItems(collection, primaryKeys) {
+      AV.string(collection, 'collection');
+      AV.array(primaryKeys, 'primaryKeys');
+
+      if (collection.startsWith('directus_')) {
+        return this.delete(`/${collection.substring(9)}/${primaryKeys.join()}`);
+      }
+
+      return this.delete(`/items/${collection}/${primaryKeys.join()}`);
+    },
+
+    // LISTING PREFERENCES
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get the collection presets of the current user for a single collection
+     * @param  {String} collection  Collection to fetch the preferences for
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getMyListingPreferences(collection, params = {}) {
+      AV.string(this.token, 'this.token');
+      AV.objectOrEmpty(params, 'params');
+      return Promise.all([
+        this.get('/collection_presets', {
+          limit: 1,
+          'filter[title][null]': 1,
+          'filter[collection][eq]': collection,
+          'filter[role][null]': 1,
+          'filter[user][null]': 1,
+          'sort': '-id'
+        }),
+        this.get('/collection_presets', {
+          limit: 1,
+          'filter[title][null]': 1,
+          'filter[collection][eq]': collection,
+          'filter[role][eq]': this.payload.role,
+          'filter[user][null]': 1,
+          'sort': '-id'
+        }),
+        this.get('/collection_presets', {
+          limit: 1,
+          'filter[title][null]': 1,
+          'filter[collection][eq]': collection,
+          'filter[role][eq]': this.payload.role,
+          'filter[user][eq]': this.payload.id,
+          'sort': '-id'
+        }),
+      ]).then((values) => {
+        const [collection, role, user] = values; // eslint-disable-line no-shadow
+        if (user.data && user.data.length > 0) {
+          return user.data[0];
+        }
+        if (role.data && role.data.length > 0) {
+          return role.data[0];
+        }
+        if (collection.data && collection.data.length > 0) {
+          return collection.data[0];
+        }
+        return {};
+      });
+    },
+
+    // PERMISSIONS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get permissions
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getPermissions(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.getItems('directus_permissions', params);
+    },
+
+    /**
+     * Get the currently logged in user's permissions
+     * @param  {Object} params Query parameters
+     * @return {RequestPromise}
+     */
+    getMyPermissions(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/permissions/me', params);
+    },
+
+    /**
+     * Create multiple new permissions
+     * @param  {Array} data  Permission records to save
+     * @return {RequestPromise}
+     */
+    createPermissions(data) {
+      AV.array(data);
+      return this.post('/permissions', data);
+    },
+
+    /**
+     * Update multiple permission records
+     * @param  {Array} data  Permission records to update
+     * @return {RequestPromise}
+     */
+    updatePermissions(data) {
+      AV.array(data);
+      return this.patch('/permissions', data);
+    },
+
+    // RELATIONS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get all relationships
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getRelations(params = {}) {
+      AV.objectOrEmpty(params);
+      return this.get('/relations', params);
+    },
+
+    createRelation(data) {
+      return this.post('/relations', data);
+    },
+
+    updateRelation(primaryKey, data) {
+      return this.patch(`/relations/${primaryKey}`, data);
+    },
+
+    /**
+     * Get the relationship information for the given collection
+     * @param  {String} collection The collection name
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getCollectionRelations(collection, params = {}) {
+      AV.string(collection, 'collection');
+      AV.objectOrEmpty(params);
+
+      return Promise.all([
+        this.get('/relations', { 'filter[collection_a][eq]': collection }),
+        this.get('/relations', { 'filter[collection_b][eq]': collection }),
+      ]);
+    },
+
+    // REVISIONS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get a single item's revisions by primary key
+     * @param  {String} collection  The collection to fetch the revisions from
+     * @param  {String|Number} primaryKey Primary key of the item
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getItemRevisions(collection, primaryKey, params = {}) {
+      AV.string(collection, 'collection');
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.objectOrEmpty(params, 'params');
+
+      if (collection.startsWith('directus_')) {
+        return this.get(`/${collection.substring(9)}/${primaryKey}/revisions`, params);
+      }
+
+      return this.get(`/items/${collection}/${primaryKey}/revisions`, params);
+    },
+
+    /**
+     * revert an item to a previous state
+     * @param  {String} collection  The collection to fetch the revisions from
+     * @param  {String|Number} primaryKey Primary key of the item
+     * @param  {Number} revisionID The ID of the revision to revert to
+     * @return {RequestPromise}
+     */
+    revert(collection, primaryKey, revisionID) {
+      AV.string(collection, 'collection');
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.number(revisionID, 'revisionID');
+
+      if (collection.startsWith('directus_')) {
+        return this.patch(`/${collection.substring(9)}/${primaryKey}/revert/${revisionID}`);
+      }
+
+      return this.patch(`/items/${collection}/${primaryKey}/revert/${revisionID}`);
+    },
+
+    // ROLES
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get a single user role
+     * @param  {Number} primaryKey  The id of the user rol to get
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getRole(primaryKey, params = {}) {
+      AV.number(primaryKey, 'primaryKey');
+      AV.objectOrEmpty(params, 'params');
+      return this.get(`/roles/${primaryKey}`, params);
+    },
+
+    /**
+     * Get the user roles
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getRoles(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/roles', params);
+    },
+
+    /**
+     * Update a user role
+     * @param  {Number} primaryKey The ID of the role
+     * @param  {Object} body       The fields to update
+     * @return {RequestPromise}
+     */
+    updateRole(primaryKey, body) {
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.object(body, 'body');
+      return this.updateItem('directus_roles', primaryKey, body);
+    },
+
+    /**
+     * Create a new user role
+     * @param  {Object} body The role information
+     * @return {RequestPromise}
+     */
+    createRole(body) {
+      AV.object(body, 'body');
+      return this.createItem('directus_roles', body);
+    },
+
+    /**
+     * Delete a user rol by primary key
+     * @param  {Number | String} primaryKey Primary key of the user role
+     * @return {RequestPromise}
+     */
+    deleteRole(primaryKey) {
+      AV.notNull(primaryKey, 'primaryKey');
+      return this.deleteItem('directus_roles', primaryKey);
+    },
+
+    // SETTINGS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get Directus' global settings
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getSettings(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/settings', params);
+    },
+
+    // USERS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get a list of available users in Directus
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getUsers(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/users', params);
+    },
+
+    /**
+     * Get a single Directus user
+     * @param  {String} primaryKey  The unique identifier of the user
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getUser(primaryKey, params = {}) {
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.objectOrEmpty(params, 'params');
+      return this.get(`/users/${primaryKey}`, params);
+    },
+
+    /**
+     * Get the user info of the currently logged in user
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getMe(params = {}) {
+      AV.objectOrEmpty(params, 'params');
+      return this.get('/users/me', params);
+    },
+
+    /**
+     * Update a single user based on primaryKey
+     * @param  {String|Number} primaryKey The primary key of the user
+     * @param  {Object} body              The fields to update
+     * @return {RequestPromise}
+     */
+    updateUser(primaryKey, body) {
+      AV.notNull(primaryKey, 'primaryKey');
+      AV.object(body, 'body');
+      return this.updateItem('directus_users', primaryKey, body);
+    },
+
+    // UTILS
+    // -------------------------------------------------------------------------
+
+    /**
+     * Ping the API to check if it exists / is up and running
+     * @return {RequestPromise}
+     */
+    ping() {
+      return this.request('get', '/server/ping', {}, {}, true);
+    },
+
+    /**
+     * Get the server info from the API
+     * @return {RequestPromise}
+     */
+    serverInfo() {
+      return this.request('get', '/', {}, {}, true);
+    },
+
+    /**
+     * Get all the setup third party auth providers
+     * @return {RequestPromise}
+     */
+    getThirdPartyAuthProviders() {
+      return this.get('/auth/sso');
+    },
+  };
 }
 
-function requiredParam(name) {
-  throw new Error(`Missing parameter [${name}]`);
-}
+// CONVENIENCE METHODS
+// -------------------------------------------------------------------------------------------------
 
-module.exports = RemoteInstance;
+SDK.getPayload = getPayload;
+module.exports = SDK;
