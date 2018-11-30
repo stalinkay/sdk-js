@@ -3,7 +3,7 @@ const expect = chai.expect;
 const jwt = require('jsonwebtoken');
 chai.use(require('chai-datetime'));
 
-const SDK = require('../remote');
+const SDK = require('../src/index');
 
 describe('JWT Payload', function() {
   let client;

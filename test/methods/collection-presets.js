@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const sinon = require('sinon');
 chai.use(require('sinon-chai'));
 
-const SDK = require('../../remote');
+const SDK = require('../../src/index');
 
 describe('Items', function() {
   let client;

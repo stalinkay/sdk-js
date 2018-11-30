@@ -1,9 +1,7 @@
-'use strict';
-
-const axios = require('axios');
-const base64 = require('base-64');
-const qs = require('qs');
-const AV = require('argument-validator');
+const axios = require("axios");
+const base64 = require("base-64");
+const qs = require("qs");
+const AV = require("argument-validator");
 
 /**
  * Retrieves the payload from a JWT
@@ -12,9 +10,9 @@ const AV = require('argument-validator');
  */
 function getPayload(token) {
   const payloadBase64 = token
-    .split('.')[1]
-    .replace('-', '+')
-    .replace('_', '/');
+    .split(".")[1]
+    .replace("-", "+")
+    .replace("_", "/");
   const payloadDecoded = base64.decode(payloadBase64);
   const payloadObject = JSON.parse(payloadDecoded);
 
@@ -37,10 +35,10 @@ function SDK(options = {}) {
   return {
     url: options.url,
     token: options.token,
-    env: options.env || '_',
+    env: options.env || "_",
     axios: axios.create({
       paramsSerializer: qs.stringify,
-      timeout: 10 * 60 * 1000, // 10 min
+      timeout: 10 * 60 * 1000 // 10 min
     }),
     refreshInterval: null,
     onAutoRefreshError: null,
@@ -85,13 +83,22 @@ function SDK(options = {}) {
      * @param  {Boolean} noEnv      Don't use the env in the path
      * @return {RequestPromise}
      */
-    request(method, endpoint, params = {}, data = {}, noEnv = false, headers = {}) {
-      AV.string(method, 'method');
-      AV.string(endpoint, 'endpoint');
-      AV.objectOrEmpty(params, 'params');
-      Array.isArray(data) ? AV.arrayOrEmpty(data, 'data') : AV.objectOrEmpty(data, 'data');
+    request(
+      method,
+      endpoint,
+      params = {},
+      data = {},
+      noEnv = false,
+      headers = {}
+    ) {
+      AV.string(method, "method");
+      AV.string(endpoint, "endpoint");
+      AV.objectOrEmpty(params, "params");
+      Array.isArray(data)
+        ? AV.arrayOrEmpty(data, "data")
+        : AV.objectOrEmpty(data, "data");
 
-      AV.string(this.url, 'this.url');
+      AV.string(this.url, "this.url");
 
       let baseURL = `${this.url}/`;
 
@@ -104,10 +111,14 @@ function SDK(options = {}) {
         method,
         baseURL,
         params,
-        data,
+        data
       };
 
-      if (this.token && typeof this.token === 'string' && this.token.length > 0) {
+      if (
+        this.token &&
+        typeof this.token === "string" &&
+        this.token.length > 0
+      ) {
         requestOptions.headers = headers;
         requestOptions.headers.Authorization = `Bearer ${this.token}`;
       }
@@ -118,10 +129,10 @@ function SDK(options = {}) {
         .then(data => {
           if (!data || data.length === 0) return data;
 
-          if (typeof data !== 'object') {
+          if (typeof data !== "object") {
             try {
               return JSON.parse(data);
-            } catch(error) {
+            } catch (error) {
               throw {
                 json: true,
                 error,
@@ -132,14 +143,14 @@ function SDK(options = {}) {
 
           return data;
         })
-        .catch((error) => {
+        .catch(error => {
           if (error.response) {
             throw error.response.data.error;
           } else if (error.json === true) {
             throw {
               // eslint-disable-line
               code: -2,
-              message: 'API returned invalid JSON',
+              message: "API returned invalid JSON",
               error: error.error,
               data: error.data
             };
@@ -147,8 +158,8 @@ function SDK(options = {}) {
             throw {
               // eslint-disable-line
               code: -1,
-              message: 'Network Error',
-              error,
+              message: "Network Error",
+              error
             };
           }
         });
@@ -161,10 +172,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     get(endpoint, params = {}) {
-      AV.string(endpoint, 'endpoint');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(endpoint, "endpoint");
+      AV.objectOrEmpty(params, "params");
 
-      return this.request('get', endpoint, params);
+      return this.request("get", endpoint, params);
     },
 
     /**
@@ -174,10 +185,12 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     post(endpoint, body = {}, params = {}) {
-      AV.string(endpoint, 'endpoint');
-      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
+      AV.string(endpoint, "endpoint");
+      Array.isArray(body)
+        ? AV.arrayOrEmpty(body, "body")
+        : AV.objectOrEmpty(body, "body");
 
-      return this.request('post', endpoint, params, body);
+      return this.request("post", endpoint, params, body);
     },
 
     /**
@@ -187,10 +200,12 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     patch(endpoint, body = {}, params = {}) {
-      AV.string(endpoint, 'endpoint');
-      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
+      AV.string(endpoint, "endpoint");
+      Array.isArray(body)
+        ? AV.arrayOrEmpty(body, "body")
+        : AV.objectOrEmpty(body, "body");
 
-      return this.request('patch', endpoint, params, body);
+      return this.request("patch", endpoint, params, body);
     },
 
     /**
@@ -200,10 +215,12 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     put(endpoint, body = {}, params = {}) {
-      AV.string(endpoint, 'endpoint');
-      Array.isArray(body) ? AV.arrayOrEmpty(body, 'body') : AV.objectOrEmpty(body, 'body');
+      AV.string(endpoint, "endpoint");
+      Array.isArray(body)
+        ? AV.arrayOrEmpty(body, "body")
+        : AV.objectOrEmpty(body, "body");
 
-      return this.request('put', endpoint, params, body);
+      return this.request("put", endpoint, params, body);
     },
 
     /**
@@ -212,9 +229,9 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     delete(endpoint) {
-      AV.string(endpoint, 'endpoint');
+      AV.string(endpoint, "endpoint");
 
-      return this.request('delete', endpoint);
+      return this.request("delete", endpoint);
     },
 
     // AUTHENTICATION
@@ -240,16 +257,16 @@ function SDK(options = {}) {
      * @return {LoginPromise}
      */
     login(credentials) {
-      AV.object(credentials, 'credentials');
-      AV.keysWithString(credentials, ['email', 'password'], 'credentials');
+      AV.object(credentials, "credentials");
+      AV.keysWithString(credentials, ["email", "password"], "credentials");
 
       this.token = null;
 
-      if (AV.hasKeysWithString(credentials, ['url'])) {
+      if (AV.hasKeysWithString(credentials, ["url"])) {
         this.url = credentials.url;
       }
 
-      if (AV.hasKeysWithString(credentials, ['env'])) {
+      if (AV.hasKeysWithString(credentials, ["env"])) {
         this.env = credentials.env;
       }
 
@@ -258,17 +275,17 @@ function SDK(options = {}) {
       }
 
       return new Promise((resolve, reject) => {
-        this.post('/auth/authenticate', {
+        this.post("/auth/authenticate", {
           email: credentials.email,
-          password: credentials.password,
+          password: credentials.password
         })
           .then(res => res.data.token)
-          .then((token) => {
+          .then(token => {
             this.token = token;
             resolve({
               url: this.url,
               env: this.env,
-              token: this.token,
+              token: this.token
             });
           })
           .catch(reject);
@@ -280,7 +297,7 @@ function SDK(options = {}) {
      */
     logout() {
       this.token = null;
-      this.env = '_';
+      this.env = "_";
       this.url = null;
 
       if (this.refreshInterval) {
@@ -294,7 +311,10 @@ function SDK(options = {}) {
      */
     startInterval(fireImmediately) {
       if (fireImmediately) this.refreshIfNeeded();
-      this.refreshInterval = setInterval(this.refreshIfNeeded.bind(this), 10000);
+      this.refreshInterval = setInterval(
+        this.refreshIfNeeded.bind(this),
+        10000
+      );
     },
 
     /**
@@ -312,7 +332,7 @@ function SDK(options = {}) {
      * Calls onAutoRefreshError if refreshing the token fails for some reason
      */
     refreshIfNeeded() {
-      if (!AV.hasStringKeys(this, ['token', 'url', 'env'])) return;
+      if (!AV.hasStringKeys(this, ["token", "url", "env"])) return;
       if (!this.payload || !this.payload.exp) return;
 
       const timeDiff = this.payload.exp.getTime() - Date.now();
@@ -320,8 +340,8 @@ function SDK(options = {}) {
       if (timeDiff <= 0) {
         if (AV.isFunction(this.onAutoRefreshError)) {
           this.onAutoRefreshError({
-            message: 'auth_expired_token',
-            code: 102,
+            message: "auth_expired_token",
+            code: 102
           });
         }
         return;
@@ -329,17 +349,17 @@ function SDK(options = {}) {
 
       if (timeDiff < 30000) {
         this.refresh(this.token)
-          .then((res) => {
+          .then(res => {
             this.token = res.data.token;
             if (AV.isFunction(this.onAutoRefreshSuccess)) {
               this.onAutoRefreshSuccess({
                 url: this.url,
                 env: this.env,
-                token: this.token,
+                token: this.token
               });
             }
           })
-          .catch((error) => {
+          .catch(error => {
             if (AV.isFunction(this.onAutoRefreshError)) {
               this.onAutoRefreshError(error);
             }
@@ -353,8 +373,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     refresh(token) {
-      AV.string(token, 'token');
-      return this.post('/auth/refresh', { token });
+      AV.string(token, "token");
+      return this.post("/auth/refresh", { token });
     },
 
     /**
@@ -365,10 +385,10 @@ function SDK(options = {}) {
      * @param {String} email The user's email
      */
     requestPasswordReset(email) {
-      AV.string(email, 'email');
-      return this.post('/auth/reset-request', {
+      AV.string(email, "email");
+      return this.post("/auth/reset-request", {
         email,
-        instance: this.url,
+        instance: this.url
       });
     },
 
@@ -381,8 +401,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getActivity(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/activity', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/activity", params);
     },
 
     // BOOKMARKS
@@ -394,19 +414,19 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getMyBookmarks(params = {}) {
-      AV.string(this.token, 'this.token');
+      AV.string(this.token, "this.token");
       AV.objectOrEmpty(params);
       return Promise.all([
-        this.get('/collection_presets', {
-          'filter[title][nnull]': 1,
-          'filter[user][eq]': this.payload.id,
+        this.get("/collection_presets", {
+          "filter[title][nnull]": 1,
+          "filter[user][eq]": this.payload.id
         }),
-        this.get('/collection_presets', {
-          'filter[title][nnull]': 1,
-          'filter[role][eq]': this.payload.role,
-          'filter[user][null]': 1,
-        }),
-      ]).then((values) => {
+        this.get("/collection_presets", {
+          "filter[title][nnull]": 1,
+          "filter[role][eq]": this.payload.role,
+          "filter[user][null]": 1
+        })
+      ]).then(values => {
         const [user, role] = values; // eslint-disable-line no-shadow
         return [...user.data, ...role.data];
       });
@@ -421,8 +441,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getCollections(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/collections', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/collections", params);
     },
 
     /**
@@ -432,8 +452,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getCollection(collection, params = {}) {
-      AV.string(collection, 'collection');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.objectOrEmpty(params, "params");
       return this.get(`/collections/${collection}`, params);
     },
 
@@ -443,8 +463,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     createCollection(data) {
-      AV.object(data, 'data');
-      return this.post('/collections', data);
+      AV.object(data, "data");
+      return this.post("/collections", data);
     },
 
     /**
@@ -453,8 +473,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateCollection(collection, data) {
-      AV.string(collection, 'collection');
-      AV.object(data, 'data');
+      AV.string(collection, "collection");
+      AV.object(data, "data");
       return this.patch(`/collections/${collection}`, data);
     },
 
@@ -463,7 +483,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     deleteCollection(collection) {
-      AV.string(collection, 'collection');
+      AV.string(collection, "collection");
       return this.delete(`/collections/${collection}`);
     },
 
@@ -477,7 +497,7 @@ function SDK(options = {}) {
      */
     createCollectionPreset(data) {
       AV.object(data);
-      return this.post('/collection_presets', data);
+      return this.post("/collection_presets", data);
     },
 
     /**
@@ -486,8 +506,8 @@ function SDK(options = {}) {
      * @param {RequestPromise} data
      */
     updateCollectionPreset(primaryKey, data) {
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.object(data, 'data');
+      AV.notNull(primaryKey, "primaryKey");
+      AV.object(data, "data");
 
       return this.patch(`/collection_presets/${primaryKey}`, data);
     },
@@ -497,7 +517,7 @@ function SDK(options = {}) {
      * @param {String|Number} primaryKey The primaryKey of the preset to delete
      */
     deleteCollectionPreset(primaryKey) {
-      AV.notNull(primaryKey, 'primaryKey');
+      AV.notNull(primaryKey, "primaryKey");
       return this.delete(`/collection_presets/${primaryKey}`);
     },
 
@@ -509,7 +529,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getInterfaces() {
-      return this.request('get', '/interfaces', {}, {}, true);
+      return this.request("get", "/interfaces", {}, {}, true);
     },
 
     /**
@@ -517,7 +537,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getLayouts() {
-      return this.request('get', '/layouts', {}, {}, true);
+      return this.request("get", "/layouts", {}, {}, true);
     },
 
     /**
@@ -525,7 +545,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getPages() {
-      return this.request('get', '/pages', {}, {}, true);
+      return this.request("get", "/pages", {}, {}, true);
     },
 
     // FIELDS
@@ -537,8 +557,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getAllFields(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/fields', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/fields", params);
     },
 
     /**
@@ -548,8 +568,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getFields(collection, params = {}) {
-      AV.string(collection, 'collection');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.objectOrEmpty(params, "params");
       return this.get(`/fields/${collection}`, params);
     },
 
@@ -561,9 +581,9 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getField(collection, fieldName, params = {}) {
-      AV.string(collection, 'collection');
-      AV.string(fieldName, 'fieldName');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.string(fieldName, "fieldName");
+      AV.objectOrEmpty(params, "params");
       return this.get(`/fields/${collection}/${fieldName}`, params);
     },
 
@@ -574,8 +594,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     createField(collection, fieldInfo) {
-      AV.string(collection, 'collection');
-      AV.object(fieldInfo, 'fieldInfo');
+      AV.string(collection, "collection");
+      AV.object(fieldInfo, "fieldInfo");
       return this.post(`/fields/${collection}`, fieldInfo);
     },
 
@@ -587,9 +607,9 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateField(collection, fieldName, fieldInfo) {
-      AV.string(collection, 'collection');
-      AV.string(fieldName, 'fieldName');
-      AV.object(fieldInfo, 'fieldInfo');
+      AV.string(collection, "collection");
+      AV.string(fieldName, "fieldName");
+      AV.object(fieldInfo, "fieldInfo");
       return this.patch(`/fields/${collection}/${fieldName}`, fieldInfo);
     },
 
@@ -624,15 +644,18 @@ function SDK(options = {}) {
      * ])
      */
     updateFields(collection, fieldsInfoOrFieldNames, fieldInfo = null) {
-      AV.string(collection, 'collection');
-      AV.array(fieldsInfoOrFieldNames, 'fieldsInfoOrFieldNames');
+      AV.string(collection, "collection");
+      AV.array(fieldsInfoOrFieldNames, "fieldsInfoOrFieldNames");
 
       if (fieldInfo) {
         AV.object(fieldInfo);
       }
 
       if (fieldInfo) {
-        return this.patch(`/fields/${collection}/${fieldsInfoOrFieldNames.join(',')}`, fieldInfo);
+        return this.patch(
+          `/fields/${collection}/${fieldsInfoOrFieldNames.join(",")}`,
+          fieldInfo
+        );
       }
 
       return this.patch(`/fields/${collection}`, fieldsInfoOrFieldNames);
@@ -645,11 +668,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     deleteField(collection, fieldName) {
-      AV.string(collection, 'collection');
-      AV.string(fieldName, 'fieldName');
+      AV.string(collection, "collection");
+      AV.string(fieldName, "fieldName");
       return this.delete(`/fields/${collection}/${fieldName}`);
     },
-
 
     // FILES
     // ------------------------------------------------------------------------
@@ -661,22 +683,25 @@ function SDK(options = {}) {
      */
     uploadFiles(data, onUploadProgress = () => {}) {
       const headers = {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
         Authorization: `Bearer ${this.token}`
       };
 
       return this.axios
-        .post(`${this.url}/${this.env}/files`, data, { headers, onUploadProgress })
+        .post(`${this.url}/${this.env}/files`, data, {
+          headers,
+          onUploadProgress
+        })
         .then(res => res.data)
-        .catch((error) => {
+        .catch(error => {
           if (error.response) {
             throw error.response.data.error;
           } else {
             throw {
               // eslint-disable-line
               code: -1,
-              message: 'Network Error',
-              error,
+              message: "Network Error",
+              error
             };
           }
         });
@@ -693,11 +718,11 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateItem(collection, primaryKey, body) {
-      AV.string(collection, 'collection');
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.object(body, 'body');
+      AV.string(collection, "collection");
+      AV.notNull(primaryKey, "primaryKey");
+      AV.object(body, "body");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.patch(`/${collection.substring(9)}/${primaryKey}`, body);
       }
 
@@ -711,10 +736,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateItems(collection, body) {
-      AV.string(collection, 'collection');
-      AV.array(body, 'body');
+      AV.string(collection, "collection");
+      AV.array(body, "body");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.patch(`/${collection.substring(9)}`, body);
       }
 
@@ -728,10 +753,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     createItem(collection, body) {
-      AV.string(collection, 'collection');
-      AV.object(body, 'body');
+      AV.string(collection, "collection");
+      AV.object(body, "body");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.post(`/${collection.substring(9)}`, body);
       }
 
@@ -745,10 +770,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     createItems(collection, body) {
-      AV.string(collection, 'collection');
-      AV.array(body, 'body');
+      AV.string(collection, "collection");
+      AV.array(body, "body");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.post(`/${collection.substring(9)}`, body);
       }
 
@@ -762,10 +787,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getItems(collection, params = {}) {
-      AV.string(collection, 'collection');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.objectOrEmpty(params, "params");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.get(`/${collection.substring(9)}`, params);
       }
 
@@ -780,11 +805,11 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getItem(collection, primaryKey, params = {}) {
-      AV.string(collection, 'collection');
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.notNull(primaryKey, "primaryKey");
+      AV.objectOrEmpty(params, "params");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.get(`/${collection.substring(9)}/${primaryKey}`, params);
       }
 
@@ -798,10 +823,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     deleteItem(collection, primaryKey) {
-      AV.string(collection, 'collection');
-      AV.notNull(primaryKey, 'primaryKey');
+      AV.string(collection, "collection");
+      AV.notNull(primaryKey, "primaryKey");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.delete(`/${collection.substring(9)}/${primaryKey}`);
       }
 
@@ -815,10 +840,10 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     deleteItems(collection, primaryKeys) {
-      AV.string(collection, 'collection');
-      AV.array(primaryKeys, 'primaryKeys');
+      AV.string(collection, "collection");
+      AV.array(primaryKeys, "primaryKeys");
 
-      if (collection.startsWith('directus_')) {
+      if (collection.startsWith("directus_")) {
         return this.delete(`/${collection.substring(9)}/${primaryKeys.join()}`);
       }
 
@@ -835,34 +860,34 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getMyListingPreferences(collection, params = {}) {
-      AV.string(this.token, 'this.token');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(this.token, "this.token");
+      AV.objectOrEmpty(params, "params");
       return Promise.all([
-        this.get('/collection_presets', {
+        this.get("/collection_presets", {
           limit: 1,
-          'filter[title][null]': 1,
-          'filter[collection][eq]': collection,
-          'filter[role][null]': 1,
-          'filter[user][null]': 1,
-          'sort': '-id'
+          "filter[title][null]": 1,
+          "filter[collection][eq]": collection,
+          "filter[role][null]": 1,
+          "filter[user][null]": 1,
+          sort: "-id"
         }),
-        this.get('/collection_presets', {
+        this.get("/collection_presets", {
           limit: 1,
-          'filter[title][null]': 1,
-          'filter[collection][eq]': collection,
-          'filter[role][eq]': this.payload.role,
-          'filter[user][null]': 1,
-          'sort': '-id'
+          "filter[title][null]": 1,
+          "filter[collection][eq]": collection,
+          "filter[role][eq]": this.payload.role,
+          "filter[user][null]": 1,
+          sort: "-id"
         }),
-        this.get('/collection_presets', {
+        this.get("/collection_presets", {
           limit: 1,
-          'filter[title][null]': 1,
-          'filter[collection][eq]': collection,
-          'filter[role][eq]': this.payload.role,
-          'filter[user][eq]': this.payload.id,
-          'sort': '-id'
-        }),
-      ]).then((values) => {
+          "filter[title][null]": 1,
+          "filter[collection][eq]": collection,
+          "filter[role][eq]": this.payload.role,
+          "filter[user][eq]": this.payload.id,
+          sort: "-id"
+        })
+      ]).then(values => {
         const [collection, role, user] = values; // eslint-disable-line no-shadow
         if (user.data && user.data.length > 0) {
           return user.data[0];
@@ -886,8 +911,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getPermissions(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.getItems('directus_permissions', params);
+      AV.objectOrEmpty(params, "params");
+      return this.getItems("directus_permissions", params);
     },
 
     /**
@@ -896,8 +921,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getMyPermissions(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/permissions/me', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/permissions/me", params);
     },
 
     /**
@@ -907,7 +932,7 @@ function SDK(options = {}) {
      */
     createPermissions(data) {
       AV.array(data);
-      return this.post('/permissions', data);
+      return this.post("/permissions", data);
     },
 
     /**
@@ -917,7 +942,7 @@ function SDK(options = {}) {
      */
     updatePermissions(data) {
       AV.array(data);
-      return this.patch('/permissions', data);
+      return this.patch("/permissions", data);
     },
 
     // RELATIONS
@@ -930,11 +955,11 @@ function SDK(options = {}) {
      */
     getRelations(params = {}) {
       AV.objectOrEmpty(params);
-      return this.get('/relations', params);
+      return this.get("/relations", params);
     },
 
     createRelation(data) {
-      return this.post('/relations', data);
+      return this.post("/relations", data);
     },
 
     updateRelation(primaryKey, data) {
@@ -948,12 +973,12 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getCollectionRelations(collection, params = {}) {
-      AV.string(collection, 'collection');
+      AV.string(collection, "collection");
       AV.objectOrEmpty(params);
 
       return Promise.all([
-        this.get('/relations', { 'filter[collection_a][eq]': collection }),
-        this.get('/relations', { 'filter[collection_b][eq]': collection }),
+        this.get("/relations", { "filter[collection_a][eq]": collection }),
+        this.get("/relations", { "filter[collection_b][eq]": collection })
       ]);
     },
 
@@ -968,12 +993,15 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getItemRevisions(collection, primaryKey, params = {}) {
-      AV.string(collection, 'collection');
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.objectOrEmpty(params, 'params');
+      AV.string(collection, "collection");
+      AV.notNull(primaryKey, "primaryKey");
+      AV.objectOrEmpty(params, "params");
 
-      if (collection.startsWith('directus_')) {
-        return this.get(`/${collection.substring(9)}/${primaryKey}/revisions`, params);
+      if (collection.startsWith("directus_")) {
+        return this.get(
+          `/${collection.substring(9)}/${primaryKey}/revisions`,
+          params
+        );
       }
 
       return this.get(`/items/${collection}/${primaryKey}/revisions`, params);
@@ -987,15 +1015,19 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     revert(collection, primaryKey, revisionID) {
-      AV.string(collection, 'collection');
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.number(revisionID, 'revisionID');
+      AV.string(collection, "collection");
+      AV.notNull(primaryKey, "primaryKey");
+      AV.number(revisionID, "revisionID");
 
-      if (collection.startsWith('directus_')) {
-        return this.patch(`/${collection.substring(9)}/${primaryKey}/revert/${revisionID}`);
+      if (collection.startsWith("directus_")) {
+        return this.patch(
+          `/${collection.substring(9)}/${primaryKey}/revert/${revisionID}`
+        );
       }
 
-      return this.patch(`/items/${collection}/${primaryKey}/revert/${revisionID}`);
+      return this.patch(
+        `/items/${collection}/${primaryKey}/revert/${revisionID}`
+      );
     },
 
     // ROLES
@@ -1008,8 +1040,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getRole(primaryKey, params = {}) {
-      AV.number(primaryKey, 'primaryKey');
-      AV.objectOrEmpty(params, 'params');
+      AV.number(primaryKey, "primaryKey");
+      AV.objectOrEmpty(params, "params");
       return this.get(`/roles/${primaryKey}`, params);
     },
 
@@ -1019,8 +1051,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getRoles(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/roles', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/roles", params);
     },
 
     /**
@@ -1030,9 +1062,9 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateRole(primaryKey, body) {
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.object(body, 'body');
-      return this.updateItem('directus_roles', primaryKey, body);
+      AV.notNull(primaryKey, "primaryKey");
+      AV.object(body, "body");
+      return this.updateItem("directus_roles", primaryKey, body);
     },
 
     /**
@@ -1041,8 +1073,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     createRole(body) {
-      AV.object(body, 'body');
-      return this.createItem('directus_roles', body);
+      AV.object(body, "body");
+      return this.createItem("directus_roles", body);
     },
 
     /**
@@ -1051,8 +1083,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     deleteRole(primaryKey) {
-      AV.notNull(primaryKey, 'primaryKey');
-      return this.deleteItem('directus_roles', primaryKey);
+      AV.notNull(primaryKey, "primaryKey");
+      return this.deleteItem("directus_roles", primaryKey);
     },
 
     // SETTINGS
@@ -1064,8 +1096,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getSettings(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/settings', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/settings", params);
     },
 
     // USERS
@@ -1077,8 +1109,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getUsers(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/users', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/users", params);
     },
 
     /**
@@ -1088,8 +1120,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getUser(primaryKey, params = {}) {
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.objectOrEmpty(params, 'params');
+      AV.notNull(primaryKey, "primaryKey");
+      AV.objectOrEmpty(params, "params");
       return this.get(`/users/${primaryKey}`, params);
     },
 
@@ -1099,8 +1131,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getMe(params = {}) {
-      AV.objectOrEmpty(params, 'params');
-      return this.get('/users/me', params);
+      AV.objectOrEmpty(params, "params");
+      return this.get("/users/me", params);
     },
 
     /**
@@ -1110,9 +1142,9 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     updateUser(primaryKey, body) {
-      AV.notNull(primaryKey, 'primaryKey');
-      AV.object(body, 'body');
-      return this.updateItem('directus_users', primaryKey, body);
+      AV.notNull(primaryKey, "primaryKey");
+      AV.object(body, "body");
+      return this.updateItem("directus_users", primaryKey, body);
     },
 
     // UTILS
@@ -1123,7 +1155,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     ping() {
-      return this.request('get', '/server/ping', {}, {}, true);
+      return this.request("get", "/server/ping", {}, {}, true);
     },
 
     /**
@@ -1131,7 +1163,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     serverInfo() {
-      return this.request('get', '/', {}, {}, true);
+      return this.request("get", "/", {}, {}, true);
     },
 
     /**
@@ -1139,8 +1171,8 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     getThirdPartyAuthProviders() {
-      return this.get('/auth/sso');
-    },
+      return this.get("/auth/sso");
+    }
   };
 }
 
