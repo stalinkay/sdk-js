@@ -521,6 +521,18 @@ function SDK(options = {}) {
       return this.delete(`/collection_presets/${primaryKey}`);
     },
 
+    // DATABASE
+    // ------------------------------------------------------------------------
+
+    /**
+     * This will update the database of the API instance to the latest version
+     * using the migrations in the API
+     * @return {RequestPromise}
+     */
+    updateDatabase() {
+      return this.post("/update");
+    },
+
     // EXTENSIONS
     // -------------------------------------------------------------------------
 
@@ -1098,6 +1110,16 @@ function SDK(options = {}) {
     getSettings(params = {}) {
       AV.objectOrEmpty(params, "params");
       return this.get("/settings", params);
+    },
+
+    /**
+     * Get the "fields" for directus_settings
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getSettingsFields(params = {}) {
+      AV.objectOrEmpty(params, "params");
+      return this.get("/settings/fields", params);
     },
 
     // USERS
