@@ -27,7 +27,7 @@ function getPayload(token) {
  * Create a new SDK instance
  * @param       {object} [options]
  * @param       {string} [options.url]   The API url to connect to
- * @param       {string} [options.env]   The API environment to connect to
+ * @param       {string} [options.project]   The API projectironment to connect to
  * @param       {string} [options.token] The access token to use for requests
  * @constructor
  */
@@ -35,7 +35,7 @@ function SDK(options = {}) {
   return {
     url: options.url,
     token: options.token,
-    env: options.env || "_",
+    project: options.project || "_",
     axios: axios.create({
       paramsSerializer: qs.stringify,
       timeout: 10 * 60 * 1000 // 10 min
@@ -53,7 +53,7 @@ function SDK(options = {}) {
       if (
         AV.isString(this.token) &&
         AV.isString(this.url) &&
-        AV.isString(this.env) &&
+        AV.isString(this.project) &&
         AV.isObject(this.payload)
       ) {
         if (this.payload.exp.getTime() > Date.now()) {
@@ -80,7 +80,7 @@ function SDK(options = {}) {
      * @param  {string} endpoint    The API endpoint to request
      * @param  {Object} [params={}] The HTTP query parameters (GET only)
      * @param  {Object} [data={}]   The HTTP request body (non-GET only)
-     * @param  {Boolean} noEnv      Don't use the env in the path
+     * @param  {Boolean} noEnv      Don't use the project in the path
      * @return {RequestPromise}
      */
     request(
@@ -103,7 +103,7 @@ function SDK(options = {}) {
       let baseURL = `${this.url}/`;
 
       if (noEnv === false) {
-        baseURL += `${this.env}/`;
+        baseURL += `${this.project}/`;
       }
 
       const requestOptions = {
@@ -253,7 +253,7 @@ function SDK(options = {}) {
      * @param  {String} credentials.email    The user's email address
      * @param  {String} credentials.password The user's password
      * @param  {String} [credentials.url]    The API to login to (overwrites this.url)
-     * @param  {String} [credentials.env]    The API env to login to (overwrites this.env)
+     * @param  {String} [credentials.project]    The API project to login to (overwrites this.project)
      * @return {LoginPromise}
      */
     login(credentials) {
@@ -266,8 +266,8 @@ function SDK(options = {}) {
         this.url = credentials.url;
       }
 
-      if (AV.hasKeysWithString(credentials, ["env"])) {
-        this.env = credentials.env;
+      if (AV.hasKeysWithString(credentials, ["project"])) {
+        this.project = credentials.project;
       }
 
       if (credentials.persist) {
@@ -284,7 +284,7 @@ function SDK(options = {}) {
             this.token = token;
             resolve({
               url: this.url,
-              env: this.env,
+              project: this.project,
               token: this.token
             });
           })
@@ -293,16 +293,23 @@ function SDK(options = {}) {
     },
 
     /**
-     * Logs the user out by "forgetting" the URL, ENV, and token, and clearing the refresh interval
+     * Logs the user out by "forgetting" the token, and clearing the refresh interval
      */
     logout() {
       this.token = null;
-      this.env = "_";
-      this.url = null;
 
       if (this.refreshInterval) {
         this.stopInterval();
       }
+    },
+
+    /**
+     * Resets the client instance by logging out and removing the URL and project
+     */
+    reset() {
+      this.logout();
+      this.url = null;
+      this.project = null;
     },
 
     /**
@@ -332,7 +339,7 @@ function SDK(options = {}) {
      * Calls onAutoRefreshError if refreshing the token fails for some reason
      */
     refreshIfNeeded() {
-      if (!AV.hasStringKeys(this, ["token", "url", "env"])) return;
+      if (!AV.hasStringKeys(this, ["token", "url", "project"])) return;
       if (!this.payload || !this.payload.exp) return;
 
       const timeDiff = this.payload.exp.getTime() - Date.now();
@@ -354,7 +361,7 @@ function SDK(options = {}) {
             if (AV.isFunction(this.onAutoRefreshSuccess)) {
               this.onAutoRefreshSuccess({
                 url: this.url,
-                env: this.env,
+                project: this.project,
                 token: this.token
               });
             }
@@ -700,7 +707,7 @@ function SDK(options = {}) {
       };
 
       return this.axios
-        .post(`${this.url}/${this.env}/files`, data, {
+        .post(`${this.url}/${this.project}/files`, data, {
           headers,
           onUploadProgress
         })
