@@ -27,7 +27,7 @@ function getPayload(token) {
  * Create a new SDK instance
  * @param       {object} [options]
  * @param       {string} [options.url]   The API url to connect to
- * @param       {string} [options.project]   The API projectironment to connect to
+ * @param       {string} [options.project]   The API project to connect to
  * @param       {string} [options.token] The access token to use for requests
  * @constructor
  */
