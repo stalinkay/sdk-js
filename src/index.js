@@ -66,7 +66,7 @@ function SDK(options = {}) {
     localExp = options.localExp;
   }
 
-  return {
+  const SDK = {
     url: url,
     token: token,
     project: project,
@@ -79,9 +79,7 @@ function SDK(options = {}) {
       paramsSerializer: qs.stringify,
       timeout: 10 * 60 * 1000 // 10 min
     }),
-    refreshInterval: token
-      ? setInterval(this.refreshIfNeeded.bind(this), 10000)
-      : null,
+    refreshInterval: null,
     onAutoRefreshError: null,
     onAutoRefreshSuccess: null,
 
@@ -1286,6 +1284,12 @@ function SDK(options = {}) {
       return this.get("/auth/sso");
     }
   };
+
+  if (SDK.token) {
+    SDK.startInterval();
+  }
+
+  return SDK;
 }
 
 // CONVENIENCE METHODS
