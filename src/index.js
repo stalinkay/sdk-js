@@ -42,6 +42,7 @@ function SDK(options = {}) {
 
     if (storedInfo) {
       storedInfo = JSON.parse(storedInfo);
+
       token = storedInfo.token;
       url = storedInfo.url;
       project = storedInfo.project;
@@ -78,7 +79,9 @@ function SDK(options = {}) {
       paramsSerializer: qs.stringify,
       timeout: 10 * 60 * 1000 // 10 min
     }),
-    refreshInterval: null,
+    refreshInterval: token
+      ? setInterval(this.refreshIfNeeded.bind(this), 10000)
+      : null,
     onAutoRefreshError: null,
     onAutoRefreshSuccess: null,
 
@@ -331,12 +334,15 @@ function SDK(options = {}) {
             this.localExp = new Date(Date.now() + 5 * 60000);
 
             if (this.storage) {
-              this.storage.setItem("directus-sdk-js", JSON.stringify({
-                token: this.token,
-                url: this.url,
-                project: this.project,
-                localExp: this.localExp
-              }));
+              this.storage.setItem(
+                "directus-sdk-js",
+                JSON.stringify({
+                  token: this.token,
+                  url: this.url,
+                  project: this.project,
+                  localExp: this.localExp
+                })
+              );
             }
 
             resolve({
@@ -432,12 +438,15 @@ function SDK(options = {}) {
             }
 
             if (this.storage) {
-              this.storage.setItem("directus-sdk-js", JSON.stringify({
-                token: this.token,
-                url: this.url,
-                project: this.project,
-                localExp: this.localExp
-              }));
+              this.storage.setItem(
+                "directus-sdk-js",
+                JSON.stringify({
+                  token: this.token,
+                  url: this.url,
+                  project: this.project,
+                  localExp: this.localExp
+                })
+              );
             }
           })
           .catch(error => {
