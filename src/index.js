@@ -32,10 +32,48 @@ function getPayload(token) {
  * @constructor
  */
 function SDK(options = {}) {
+  let token;
+  let url;
+  let project = "_";
+  let localExp;
+
+  if (options.storage) {
+    let storedInfo = options.storage.getItem("directus-sdk-js");
+
+    if (storedInfo) {
+      storedInfo = JSON.parse(storedInfo);
+      token = storedInfo.token;
+      url = storedInfo.url;
+      project = storedInfo.project;
+      localExp = storedInfo.localExp;
+    }
+  }
+
+  if (options.token) {
+    token = options.token;
+  }
+
+  if (options.url) {
+    url = options.url;
+  }
+
+  if (options.project) {
+    project = options.token;
+  }
+
+  if (options.localExp) {
+    localExp = options.localExp;
+  }
+
   return {
-    url: options.url,
-    token: options.token,
-    project: options.project || "_",
+    url: url,
+    token: token,
+    project: project,
+
+    // The token will contain an expiry time based on the server time
+    // In order to make sure we check the right expiry date, we need to
+    // keep a version that's based on the browser time
+    localExp: localExp,
     axios: axios.create({
       paramsSerializer: qs.stringify,
       timeout: 10 * 60 * 1000 // 10 min
@@ -43,6 +81,10 @@ function SDK(options = {}) {
     refreshInterval: null,
     onAutoRefreshError: null,
     onAutoRefreshSuccess: null,
+
+    // The storage method to use. Has to support getItem and setItem to store and
+    // retrieve the token
+    storage: options.storage || null,
 
     get payload() {
       if (!AV.isString(this.token)) return null;
@@ -250,13 +292,15 @@ function SDK(options = {}) {
      *
      * Gets a new token from the API and stores it in this.token
      * @param  {Object} credentials
-     * @param  {String} credentials.email    The user's email address
-     * @param  {String} credentials.password The user's password
-     * @param  {String} [credentials.url]    The API to login to (overwrites this.url)
-     * @param  {String} [credentials.project]    The API project to login to (overwrites this.project)
+     * @param  {String} credentials.email     The user's email address
+     * @param  {String} credentials.password  The user's password
+     * @param  {String} [credentials.url]     The API to login to (overwrites this.url)
+     * @param  {String} [credentials.project] The API project to login to (overwrites this.project)
+     * @param  {String} [options.persist]     Auto-fetch a new token when it's about to expire
+     * @param  {Boolean} [options.storage]    Where to store the token (survive refreshes)
      * @return {LoginPromise}
      */
-    login(credentials) {
+    login(credentials, options = { persist: true }) {
       AV.object(credentials, "credentials");
       AV.keysWithString(credentials, ["email", "password"], "credentials");
 
@@ -270,7 +314,7 @@ function SDK(options = {}) {
         this.project = credentials.project;
       }
 
-      if (credentials.persist) {
+      if (credentials.persist || options.persist) {
         this.startInterval();
       }
 
@@ -282,10 +326,24 @@ function SDK(options = {}) {
           .then(res => res.data.token)
           .then(token => {
             this.token = token;
+
+            // Expiry date is the moment we got the token + 5 minutes
+            this.localExp = new Date(Date.now() + 5 * 60000);
+
+            if (this.storage) {
+              this.storage.setItem("directus-sdk-js", JSON.stringify({
+                token: this.token,
+                url: this.url,
+                project: this.project,
+                localExp: this.localExp
+              }));
+            }
+
             resolve({
               url: this.url,
               project: this.project,
-              token: this.token
+              token: this.token,
+              localExp: this.localExp
             });
           })
           .catch(reject);
@@ -300,6 +358,10 @@ function SDK(options = {}) {
 
       if (this.refreshInterval) {
         this.stopInterval();
+      }
+
+      if (this.storage) {
+        this.storage.removeItem("directus-sdk-js");
       }
     },
 
@@ -342,7 +404,7 @@ function SDK(options = {}) {
       if (!AV.hasStringKeys(this, ["token", "url", "project"])) return;
       if (!this.payload || !this.payload.exp) return;
 
-      const timeDiff = this.payload.exp.getTime() - Date.now();
+      const timeDiff = this.localExp - Date.now();
 
       if (timeDiff <= 0) {
         if (AV.isFunction(this.onAutoRefreshError)) {
@@ -358,12 +420,24 @@ function SDK(options = {}) {
         this.refresh(this.token)
           .then(res => {
             this.token = res.data.token;
+            this.localExp = new Date(Date.now() + 5 * 60000);
+
             if (AV.isFunction(this.onAutoRefreshSuccess)) {
               this.onAutoRefreshSuccess({
                 url: this.url,
                 project: this.project,
-                token: this.token
+                token: this.token,
+                localExp: this.localExp
               });
+            }
+
+            if (this.storage) {
+              this.storage.setItem("directus-sdk-js", JSON.stringify({
+                token: this.token,
+                url: this.url,
+                project: this.project,
+                localExp: this.localExp
+              }));
             }
           })
           .catch(error => {
