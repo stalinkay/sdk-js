@@ -99,7 +99,7 @@ function SDK(options = {}) {
         AV.isString(this.project) &&
         AV.isObject(this.payload)
       ) {
-        if (this.payload.exp.getTime() > Date.now()) {
+        if (this.localExp > Date.now()) {
           return true;
         }
       }
@@ -329,7 +329,7 @@ function SDK(options = {}) {
             this.token = token;
 
             // Expiry date is the moment we got the token + 5 minutes
-            this.localExp = new Date(Date.now() + 5 * 60000);
+            this.localExp = new Date(Date.now() + 5 * 60000).getTime();
 
             if (this.storage) {
               this.storage.setItem(
@@ -424,7 +424,7 @@ function SDK(options = {}) {
         this.refresh(this.token)
           .then(res => {
             this.token = res.data.token;
-            this.localExp = new Date(Date.now() + 5 * 60000);
+            this.localExp = new Date(Date.now() + 5 * 60000).getTime();
 
             if (AV.isFunction(this.onAutoRefreshSuccess)) {
               this.onAutoRefreshSuccess({
