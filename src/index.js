@@ -1286,7 +1286,7 @@ function SDK(options = {}) {
   };
 
   if (SDK.token) {
-    SDK.startInterval();
+    SDK.startInterval(true);
   }
 
   return SDK;
