@@ -1,6 +1,6 @@
 {
   "name": "@directus/sdk-js",
-  "version": "5.1.2",
+  "version": "5.1.3",
   "description": "Directus SDK for JavaScript (Node and Browser)",
   "main": "dist/directus-sdk.js",
   "browser": "dist/directus-sdk.umd.min.js",
