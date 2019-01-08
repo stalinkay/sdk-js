@@ -59,7 +59,7 @@ function SDK(options = {}) {
   }
 
   if (options.project) {
-    project = options.token;
+    project = options.project;
   }
 
   if (options.localExp) {
