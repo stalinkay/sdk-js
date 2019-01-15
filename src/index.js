@@ -1285,7 +1285,8 @@ function SDK(options = {}) {
     }
   };
 
-  if (SDK.token) {
+  // Only start the auto refresh interval if the token exists and it's a JWT
+  if (SDK.token && SDK.token.includes(".")) {
     SDK.startInterval(true);
   }
 
