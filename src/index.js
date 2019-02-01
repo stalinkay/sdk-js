@@ -815,35 +815,37 @@ function SDK(options = {}) {
      * @param  {String} collection The collection to add the item to
      * @param  {String|Number} primaryKey Primary key of the item
      * @param  {Object} body       The item's field values
+     * @param  {Object} params     Query parameters
      * @return {RequestPromise}
      */
-    updateItem(collection, primaryKey, body) {
+    updateItem(collection, primaryKey, body, params = {}) {
       AV.string(collection, "collection");
       AV.notNull(primaryKey, "primaryKey");
       AV.object(body, "body");
 
       if (collection.startsWith("directus_")) {
-        return this.patch(`/${collection.substring(9)}/${primaryKey}`, body);
+        return this.patch(`/${collection.substring(9)}/${primaryKey}`, body, params);
       }
 
-      return this.patch(`/items/${collection}/${primaryKey}`, body);
+      return this.patch(`/items/${collection}/${primaryKey}`, body, params);
     },
 
     /**
      * Update multiple items
      * @param  {String} collection The collection to add the item to
      * @param  {Array} body        The item's field values
+     * @param  {Object} params     Query Parameters
      * @return {RequestPromise}
      */
-    updateItems(collection, body) {
+    updateItems(collection, body, params = {}) {
       AV.string(collection, "collection");
       AV.array(body, "body");
 
       if (collection.startsWith("directus_")) {
-        return this.patch(`/${collection.substring(9)}`, body);
+        return this.patch(`/${collection.substring(9)}`, body, params);
       }
 
-      return this.patch(`/items/${collection}`, body);
+      return this.patch(`/items/${collection}`, body, params);
     },
 
     /**
