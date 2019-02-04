@@ -474,9 +474,8 @@ function SDK(options = {}) {
      */
     requestPasswordReset(email) {
       AV.string(email, "email");
-      return this.post("/auth/reset-request", {
-        email,
-        instance: this.url
+      return this.post("/auth/password/request", {
+        email: email
       });
     },
 
@@ -824,7 +823,11 @@ function SDK(options = {}) {
       AV.object(body, "body");
 
       if (collection.startsWith("directus_")) {
-        return this.patch(`/${collection.substring(9)}/${primaryKey}`, body, params);
+        return this.patch(
+          `/${collection.substring(9)}/${primaryKey}`,
+          body,
+          params
+        );
       }
 
       return this.patch(`/items/${collection}/${primaryKey}`, body, params);
