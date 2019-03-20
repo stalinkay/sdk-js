@@ -1282,6 +1282,14 @@ function SDK(options = {}) {
     },
 
     /**
+     * Get the server info from the project
+     * @return {RequestPromise}
+     */
+    projectInfo() {
+      return this.request("get", "/");
+    },
+
+    /**
      * Get all the setup third party auth providers
      * @return {RequestPromise}
      */
