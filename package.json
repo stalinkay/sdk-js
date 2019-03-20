@@ -31,10 +31,15 @@
   },
   "homepage": "https://docs.directus.io/sdk/js.html",
   "dependencies": {
+    "@types/axios": "^0.14.0",
+    "@types/base-64": "^0.1.2",
+    "@types/node": "^10.12.18",
+    "@types/qs": "^6.5.1",
     "argument-validator": "^0.1.0",
     "axios": "^0.18.0",
     "base-64": "^0.1.0",
-    "qs": "^6.5.1"
+    "node": "^11.6.0",
+    "qs": "^6.6.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.1.5",
@@ -50,6 +55,8 @@
     "prettier": "^1.15.3",
     "sinon": "^7.1.1",
     "sinon-chai": "^3.3.0",
+    "ts-loader": "^5.3.3",
+    "typescript": "^3.2.2",
     "webpack": "^4.26.1",
     "webpack-cli": "^3.1.2",
     "webpack-node-externals": "^1.7.2"
