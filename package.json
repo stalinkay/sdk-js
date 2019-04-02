@@ -4,13 +4,14 @@
   "description": "Directus SDK for JavaScript (Node and Browser)",
   "main": "dist/directus-sdk.js",
   "browser": "dist/directus-sdk.umd.min.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
     "fix": "prettier --write src/*.js",
     "test": "mocha --exit --recursive",
-    "build": "webpack",
+    "build": "webpack && tsc",
     "dev": "webpack --progress --colors --watch"
   },
   "repository": "directus/sdk-js",

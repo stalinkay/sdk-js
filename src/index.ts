@@ -84,7 +84,7 @@ class Keys {
     static DefaultProject = "_"
 }
 
-export class DirectusSDK {
+export default class DirectusSDK {
     private _url: string
     private _project: string
 
