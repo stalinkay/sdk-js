@@ -35,25 +35,25 @@
     "argument-validator": "^0.1.0",
     "axios": "^0.18.0",
     "base-64": "^0.1.0",
-    "node": "^11.6.0",
-    "qs": "^6.6.0"
+    "node": "^11.12.0",
+    "qs": "^6.7.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.1.5",
-    "@babel/core": "^7.1.6",
-    "@babel/preset-env": "^7.1.6",
-    "babel-loader": "^8.0.4",
+    "@babel/cli": "^7.4.3",
+    "@babel/core": "^7.4.3",
+    "@babel/preset-env": "^7.4.3",
+    "babel-loader": "^8.0.5",
     "babel-plugin-add-module-exports": "^1.0.0",
     "chai": "^4.2.0",
     "chai-datetime": "^1.5.0",
-    "jsonwebtoken": "^8.4.0",
+    "jsonwebtoken": "^8.5.1",
     "mocha": "^5.2.0",
-    "nyc": "^13.1.0",
-    "prettier": "^1.15.3",
-    "sinon": "^7.1.1",
+    "nyc": "^13.3.0",
+    "prettier": "^1.16.4",
+    "sinon": "^7.3.1",
     "sinon-chai": "^3.3.0",
-    "webpack": "^4.26.1",
-    "webpack-cli": "^3.1.2",
+    "webpack": "^4.29.6",
+    "webpack-cli": "^3.3.0",
     "webpack-node-externals": "^1.7.2"
   }
 }
