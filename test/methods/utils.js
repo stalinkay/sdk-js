@@ -39,7 +39,7 @@ describe('Utils', function() {
   describe('#ping()', function() {
     it('It calls get for the ping endpoint', function() {
       client.ping();
-      expect(client.request).to.have.been.calledWith('get', '/server/ping', {}, {}, true);
+      expect(client.request).to.have.been.calledWith('get', '/server/ping', {}, {}, true, true);
     });
   });
 

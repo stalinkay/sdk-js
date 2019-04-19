@@ -124,6 +124,7 @@ function SDK(options = {}) {
      * @param  {Object} [params={}] The HTTP query parameters (GET only)
      * @param  {Object} [data={}]   The HTTP request body (non-GET only)
      * @param  {Boolean} noEnv      Don't use the project in the path
+     * @param  {Boolean} ignoreJson Don't parse the API result into JSON
      * @return {RequestPromise}
      */
     request(
@@ -132,7 +133,8 @@ function SDK(options = {}) {
       params = {},
       data = {},
       noEnv = false,
-      headers = {}
+      headers = {},
+      ignoreJson = false
     ) {
       AV.string(method, "method");
       AV.string(endpoint, "endpoint");
@@ -171,6 +173,8 @@ function SDK(options = {}) {
         .then(res => res.data)
         .then(data => {
           if (!data || data.length === 0) return data;
+
+          if (ignoreJson) return data;
 
           if (typeof data !== "object") {
             try {
@@ -1270,7 +1274,7 @@ function SDK(options = {}) {
      * @return {RequestPromise}
      */
     ping() {
-      return this.request("get", "/server/ping", {}, {}, true);
+      return this.request("get", "/server/ping", {}, {}, true, true);
     },
 
     /**
