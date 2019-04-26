@@ -29,6 +29,7 @@ function getPayload(token) {
  * @param       {string} [options.url]   The API url to connect to
  * @param       {string} [options.project]   The API project to connect to
  * @param       {string} [options.token] The access token to use for requests
+ * @param       {number} [options.tokenExpiryTime] The time it takes for the API token to expire
  * @constructor
  */
 function SDK(options = {}) {
@@ -36,6 +37,7 @@ function SDK(options = {}) {
   let url;
   let project = "_";
   let localExp;
+  let tokenExpiryTime = 5;
 
   if (options.storage) {
     let storedInfo = options.storage.getItem("directus-sdk-js");
@@ -66,6 +68,10 @@ function SDK(options = {}) {
     localExp = options.localExp;
   }
 
+  if (options.tokenExpiryTime) {
+    tokenExpiryTime = options.tokenExpiryTime;
+  }
+
   const SDK = {
     url: url,
     token: token,
@@ -86,6 +92,9 @@ function SDK(options = {}) {
     // The storage method to use. Has to support getItem and setItem to store and
     // retrieve the token
     storage: options.storage || null,
+
+    // Defaults to 5 minutes. Once the API supports a custom, this option can be used to reflect that
+    tokenExpiryTime: tokenExpiryTime,
 
     get payload() {
       if (!AV.isString(this.token)) return null;
@@ -333,7 +342,7 @@ function SDK(options = {}) {
             this.token = token;
 
             // Expiry date is the moment we got the token + 5 minutes
-            this.localExp = new Date(Date.now() + 5 * 60000).getTime();
+            this.localExp = new Date(Date.now() + this.tokenExpiryTime * 60000).getTime();
 
             if (this.storage) {
               this.storage.setItem(
@@ -428,7 +437,7 @@ function SDK(options = {}) {
         this.refresh(this.token)
           .then(res => {
             this.token = res.data.token;
-            this.localExp = new Date(Date.now() + 5 * 60000).getTime();
+            this.localExp = new Date(Date.now() + this.tokenExpiryTime * 60000).getTime();
 
             if (AV.isFunction(this.onAutoRefreshSuccess)) {
               this.onAutoRefreshSuccess({
