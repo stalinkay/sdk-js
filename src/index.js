@@ -308,6 +308,7 @@ function SDK(options = {}) {
      * @param  {Object} credentials
      * @param  {String} credentials.email     The user's email address
      * @param  {String} credentials.password  The user's password
+     * @param  {String} [credentials.otp]     The user's 2FA OTP
      * @param  {String} [credentials.url]     The API to login to (overwrites this.url)
      * @param  {String} [credentials.project] The API project to login to (overwrites this.project)
      * @param  {String} [options.persist]     Auto-fetch a new token when it's about to expire
@@ -335,7 +336,8 @@ function SDK(options = {}) {
       return new Promise((resolve, reject) => {
         this.post("/auth/authenticate", {
           email: credentials.email,
-          password: credentials.password
+          password: credentials.password,
+          otp: credentials.otp
         })
           .then(res => res.data.token)
           .then(token => {
