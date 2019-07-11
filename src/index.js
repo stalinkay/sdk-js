@@ -789,7 +789,17 @@ function SDK(options = {}) {
 
     // FILES
     // ------------------------------------------------------------------------
-
+    
+    /**
+     * Get a list of available files in Directus
+     * @param  {Object} [params={}] Query parameters
+     * @return {RequestPromise}
+     */
+    getFiles(params = {}) {
+      AV.objectOrEmpty(params, "params");
+      return this.get("/files", params);
+    },
+    
     /**
      * Upload multipart files in multipart/form-data
      * @param  {Object} data FormData object containing files
